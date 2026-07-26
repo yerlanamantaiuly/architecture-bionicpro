@@ -16,3 +16,7 @@
 ## Задание 1 / Задача 3 — bionicpro-auth
 
 См. [bionicpro-auth.md](bionicpro-auth.md).
+
+## Задание 1 / Задача 4 — LDAP
+
+См. [ldap.md](ldap.md).

@@ -10,6 +10,44 @@ services:
     ports:
       - "5433:5432"
 
+  ldap:
+    image: osixia/openldap:1.5.0
+    environment:
+      LDAP_ORGANISATION: "BionicPRO Representation"
+      LDAP_DOMAIN: "example.com"
+      LDAP_ADMIN_PASSWORD: "admin"
+      LDAP_CONFIG_PASSWORD: "config"
+      LDAP_READONLY_USER: "false"
+      LDAP_TLS: "false"
+    ports:
+      - "389:389"
+      - "636:636"
+    volumes:
+      - ./ldap/config.ldif:/ldifs/config.ldif:ro
+    healthcheck:
+      test: ["CMD", "ldapsearch", "-x", "-H", "ldap://localhost", "-b", "dc=example,dc=com", "-D", "cn=admin,dc=example,dc=com", "-w", "admin"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  ldap-init:
+    image: osixia/openldap:1.5.0
+    depends_on:
+      ldap:
+        condition: service_healthy
+    volumes:
+      - ./ldap/config.ldif:/ldifs/config.ldif:ro
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        set -e
+        echo "Loading BionicPRO LDIF into OpenLDAP..."
+        ldapadd -x -H ldap://ldap -D "cn=admin,dc=example,dc=com" -w admin -f /ldifs/config.ldif || true
+        echo "LDAP init done"
+        ldapsearch -x -H ldap://ldap -b "ou=People,dc=example,dc=com" -D "cn=admin,dc=example,dc=com" -w admin "(uid=*)" uid
+    restart: "no"
+
   keycloak:
     image: quay.io/keycloak/keycloak:21.1
     environment:
@@ -34,6 +72,7 @@ services:
       - "8080:8080"
     depends_on:
       - keycloak_db
+      - ldap
 
   bionicpro-auth:
     build:
