@@ -1,0 +1,172 @@
+<mxfile host="app.diagrams.net" modified="2026-07-26T13:48:00.000Z" agent="BionicPRO Sprint 9" version="22.1.0" type="device">
+  <diagram id="auth-c4" name="BionicPRO Auth C4">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="BionicPRO — C4 Container: управление учётными данными (Задание 1 / Задача 1)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontStyle=1;fontSize=18;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="900" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="Access/refresh токены не покидают bionicpro-auth. ПДн и медданные хранятся локально в стране представительства." style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=12;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="40" y="50" width="900" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Person: Pilot -->
+        <mxCell id="person_pilot" value="&lt;b&gt;Пилот протеза&lt;/b&gt;&lt;br&gt;[Person]&lt;br&gt;Пользователь Android/iOS&lt;br&gt;и веб-приложения отчётов" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#08427b;fontColor=#ffffff;strokeColor=#073B6F;align=center;verticalAlign=middle;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="200" width="160" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- Country boundary (data residency) -->
+        <mxCell id="country_boundary" value="Граница страны представительства — локальное хранение ПДн / медданных" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFF9E6;strokeColor=#D6B656;dashed=1;dashPattern=8 8;verticalAlign=top;fontStyle=2;fontSize=11;align=left;spacingLeft=10;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="240" y="90" width="1100" height="720" as="geometry" />
+        </mxCell>
+
+        <!-- BionicPRO System boundary -->
+        <mxCell id="system_boundary" value="BionicPRO [Software System]" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E8F4FC;strokeColor=#6C8EBF;dashed=1;dashPattern=8 8;verticalAlign=top;fontStyle=1;fontSize=13;align=left;spacingLeft=10;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="270" y="130" width="780" height="500" as="geometry" />
+        </mxCell>
+
+        <!-- Frontend -->
+        <mxCell id="frontend" value="&lt;b&gt;Frontend (Reports UI)&lt;/b&gt;&lt;br&gt;[Container: React / TypeScript]&lt;br&gt;Логин через redirect.&lt;br&gt;Хранит только session cookie&lt;br&gt;(HttpOnly, Secure).&lt;br&gt;&lt;i&gt;Токены IdP не получает.&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#23A2D9;fontColor=#ffffff;strokeColor=#0E7DAD;align=center;verticalAlign=middle;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="300" y="180" width="200" height="130" as="geometry" />
+        </mxCell>
+
+        <!-- bionicpro-auth BFF -->
+        <mxCell id="auth_svc" value="&lt;b&gt;bionicpro-auth&lt;/b&gt;&lt;br&gt;[Container: FastAPI / BFF]&lt;br&gt;PKCE code exchange.&lt;br&gt;Хранит access + refresh&lt;br&gt;(память / encrypted cache).&lt;br&gt;Session cookie → фронт.&lt;br&gt;Ротация session id.&lt;br&gt;Silent refresh токенов." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#23A2D9;fontColor=#ffffff;strokeColor=#0E7DAD;align=center;verticalAlign=middle;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="560" y="170" width="220" height="150" as="geometry" />
+        </mxCell>
+
+        <!-- Reports API -->
+        <mxCell id="reports_api" value="&lt;b&gt;Reports / Prosthesis API&lt;/b&gt;&lt;br&gt;[Container]&lt;br&gt;Проверяет сессию через&lt;br&gt;bionicpro-auth.&lt;br&gt;Отчёты, телеметрия." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#23A2D9;fontColor=#ffffff;strokeColor=#0E7DAD;align=center;verticalAlign=middle;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="300" y="360" width="200" height="110" as="geometry" />
+        </mxCell>
+
+        <!-- Keycloak -->
+        <mxCell id="keycloak" value="&lt;b&gt;Keycloak (IdP)&lt;/b&gt;&lt;br&gt;[Container]&lt;br&gt;OAuth2 / OIDC.&lt;br&gt;PKCE, MFA (OTP).&lt;br&gt;User Federation (LDAP).&lt;br&gt;Identity Brokering&lt;br&gt;(внешние IdP по странам)." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#23A2D9;fontColor=#ffffff;strokeColor=#0E7DAD;align=center;verticalAlign=middle;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="830" y="170" width="200" height="150" as="geometry" />
+        </mxCell>
+
+        <!-- Local DB for PII/medical -->
+        <mxCell id="local_db" value="&lt;b&gt;Локальная БД&lt;/b&gt;&lt;br&gt;[Container: PostgreSQL]&lt;br&gt;ПДн, медданные, профили,&lt;br&gt;телеметрия протезов.&lt;br&gt;&lt;i&gt;Не реплицируется за&lt;br&gt;границу страны.&lt;/i&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=12;fillColor=#438DD5;fontColor=#ffffff;strokeColor=#2E6295;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="560" y="380" width="180" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- Session store -->
+        <mxCell id="session_store" value="&lt;b&gt;Session / Token Store&lt;/b&gt;&lt;br&gt;[Container: in-memory / Redis]&lt;br&gt;session_id → access/refresh&lt;br&gt;(encrypted). Только у auth." style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#438DD5;fontColor=#ffffff;strokeColor=#2E6295;align=center;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="560" y="540" width="180" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- OpenLDAP (country representation) -->
+        <mxCell id="ldap" value="&lt;b&gt;OpenLDAP&lt;/b&gt;&lt;br&gt;[Software System:&lt;br&gt;представительство]&lt;br&gt;Учётные записи и роли&lt;br&gt;сотрудников / пилотов&lt;br&gt;в стране. Источник&lt;br&gt;для User Federation." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#999999;fontColor=#ffffff;strokeColor=#6B6B6B;align=center;verticalAlign=middle;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="170" width="200" height="140" as="geometry" />
+        </mxCell>
+
+        <!-- External IdPs -->
+        <mxCell id="idp_yandex" value="&lt;b&gt;Яндекс ID&lt;/b&gt;&lt;br&gt;[External IdP]&lt;br&gt;Identity Brokering&lt;br&gt;(РФ / СНГ)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#999999;fontColor=#ffffff;strokeColor=#6B6B6B;align=center;verticalAlign=middle;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="350" width="160" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="idp_other" value="&lt;b&gt;Внешний IdP страны N&lt;/b&gt;&lt;br&gt;[External IdP]&lt;br&gt;Brokering для других&lt;br&gt;рынков (OIDC/SAML)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#999999;fontColor=#ffffff;strokeColor=#6B6B6B;align=center;verticalAlign=middle;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="470" width="160" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- Mobile app note -->
+        <mxCell id="mobile" value="&lt;b&gt;Приложение донастройки&lt;/b&gt;&lt;br&gt;[Container: iOS / Android]&lt;br&gt;Тот же auth-поток&lt;br&gt;через bionicpro-auth" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#23A2D9;fontColor=#ffffff;strokeColor=#0E7DAD;align=center;verticalAlign=middle;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="300" y="520" width="200" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- Edges -->
+        <!-- Pilot -> Frontend -->
+        <mxCell id="e1" value="Логин / просмотр отчётов" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;fontSize=10;" edge="1" parent="1" source="person_pilot" target="frontend">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Frontend -> Auth -->
+        <mxCell id="e2" value="1. /login, /callback&lt;br&gt;3. session cookie&lt;br&gt;(HttpOnly + Secure)" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;fontSize=10;startArrow=block;startFill=0;" edge="1" parent="1" source="frontend" target="auth_svc">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Auth -> Keycloak -->
+        <mxCell id="e3" value="2. Authorization Code&lt;br&gt;+ PKCE (S256)&lt;br&gt;code → tokens&lt;br&gt;(токены остаются здесь)" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;fontSize=10;" edge="1" parent="1" source="auth_svc" target="keycloak">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Auth -> Session store -->
+        <mxCell id="e4" value="bind tokens&lt;br&gt;to session_id" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;fontSize=10;" edge="1" parent="1" source="auth_svc" target="session_store">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="670" y="340" />
+              <mxPoint x="670" y="540" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Frontend -> Reports API -->
+        <mxCell id="e5" value="API + cookie&lt;br&gt;(без Bearer токена IdP)" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;fontSize=10;" edge="1" parent="1" source="frontend" target="reports_api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Reports -> Auth (session check) -->
+        <mxCell id="e6" value="validate / rotate&lt;br&gt;session" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;dashed=1;fontSize=10;" edge="1" parent="1" source="reports_api" target="auth_svc">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="400" y="340" />
+              <mxPoint x="560" y="300" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Reports -> Local DB -->
+        <mxCell id="e7" value="чтение/запись&lt;br&gt;локальных данных" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;fontSize=10;" edge="1" parent="1" source="reports_api" target="local_db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Auth may save profile to local DB -->
+        <mxCell id="e8" value="профиль после&lt;br&gt;consent (Яндекс ID)" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;dashed=1;fontSize=10;" edge="1" parent="1" source="auth_svc" target="local_db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Keycloak -> LDAP -->
+        <mxCell id="e9" value="User Federation&lt;br&gt;sync users + roles" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;fontSize=10;" edge="1" parent="1" source="keycloak" target="ldap">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Keycloak -> Yandex -->
+        <mxCell id="e10" value="Identity Brokering" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;fontSize=10;" edge="1" parent="1" source="keycloak" target="idp_yandex">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Keycloak -> other IdP -->
+        <mxCell id="e11" value="Identity Brokering" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;dashed=1;fontSize=10;" edge="1" parent="1" source="keycloak" target="idp_other">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Pilot -> Mobile -->
+        <mxCell id="e12" value="донастройка" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;fontSize=10;" edge="1" parent="1" source="person_pilot" target="mobile">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="120" y="565" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Mobile -> Auth -->
+        <mxCell id="e13" value="тот же BFF-поток" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;dashed=1;fontSize=10;" edge="1" parent="1" source="mobile" target="auth_svc">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="500" y="565" />
+              <mxPoint x="500" y="320" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="legend" value="&lt;b&gt;Легенда / принципы&lt;/b&gt;&lt;br&gt;1. Унификация доступа: учётки из LDAP представительства через Keycloak User Federation; ПДн/медданные только в локальной БД страны.&lt;br&gt;2. Токены IdP (access/refresh) хранит только bionicpro-auth; фронт получает session cookie (HttpOnly, Secure).&lt;br&gt;3. Разные страны — разные внешние IdP через Identity Brokering (Яндекс ID и др.).&lt;br&gt;4. PKCE (S256) + MFA OTP; ротация session id против session fixation." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="840" width="1300" height="100" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
