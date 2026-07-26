@@ -13,4 +13,6 @@
 2. **Безопасная работа с токенами** — `bionicpro-auth` (BFF) обменивает authorization code (PKCE) на access/refresh, хранит их у себя и отдаёт фронту только session cookie (`HttpOnly` + `Secure`).
 3. **Внешние IdP по странам** — Identity Brokering (Яндекс ID и IdP других рынков).
 
-Открыть/править: [diagrams.net](https://app.diagrams.net/) → Open Existing Diagram → `auth-c4.drawio`.
+## Задание 1 / Задача 3 — bionicpro-auth
+
+См. [bionicpro-auth.md](bionicpro-auth.md).
