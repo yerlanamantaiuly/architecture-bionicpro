@@ -24,3 +24,7 @@
 ## Задание 1 / Задача 5 — MFA OTP
 
 См. [mfa.md](mfa.md).
+
+## Задание 1 / Задача 6 — Яндекс ID
+
+См. [yandex-id.md](yandex-id.md).

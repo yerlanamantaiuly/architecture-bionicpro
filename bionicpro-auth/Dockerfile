@@ -7,7 +7,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY main.py .
 
+RUN mkdir -p /data
+
 ENV PYTHONUNBUFFERED=1
+ENV PROFILE_DB_PATH=/data/profiles.db
 
 EXPOSE 8001
 

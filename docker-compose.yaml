@@ -92,6 +92,10 @@ services:
       COOKIE_SAMESITE: lax
       SESSION_TTL_SECONDS: "1800"
       TOKEN_ENCRYPTION_KEY: "iw3lx6S7H4IMZsm_xrqEJqa5kHozlwoP9J0WFWHHRoU="
+      PROFILE_DB_PATH: /data/profiles.db
+      YANDEX_IDP_ALIAS: yandex
+    volumes:
+      - ./bionicpro-auth/data:/data
     depends_on:
       - keycloak
 

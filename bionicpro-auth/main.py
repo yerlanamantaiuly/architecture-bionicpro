@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import json
 import os
 import secrets
+import sqlite3
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any
+from pathlib import Path
+from typing import Any, Iterator
 from urllib.parse import urlencode
 
 import httpx
@@ -21,9 +25,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 # Config
 # ---------------------------------------------------------------------------
 
-# Internal URL for server-to-server calls (docker network)
 KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://localhost:8080")
-# Public URL for browser redirects (must be reachable from the user's browser)
 KEYCLOAK_PUBLIC_URL = os.getenv("KEYCLOAK_PUBLIC_URL", KEYCLOAK_URL)
 KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "reports-realm")
 CLIENT_ID = os.getenv("KEYCLOAK_CLIENT_ID", "bionicpro-auth")
@@ -33,14 +35,16 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 COOKIE_NAME = os.getenv("COOKIE_NAME", "bionicpro_session")
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
 COOKIE_SAMESITE = os.getenv("COOKIE_SAMESITE", "lax")
-# Session must outlive access_token (≤2 min). Default 30 minutes.
 SESSION_TTL_SECONDS = int(os.getenv("SESSION_TTL_SECONDS", "1800"))
-# Fernet key for encrypting refresh tokens at rest in memory
+YANDEX_IDP_ALIAS = os.getenv("YANDEX_IDP_ALIAS", "yandex")
+PROFILE_DB_PATH = os.getenv("PROFILE_DB_PATH", "/data/profiles.db")
+
 _FERNET_KEY = os.getenv("TOKEN_ENCRYPTION_KEY") or Fernet.generate_key().decode()
 _fernet = Fernet(_FERNET_KEY.encode() if isinstance(_FERNET_KEY, str) else _FERNET_KEY)
 
 REALM_BASE = f"{KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect"
 REALM_PUBLIC = f"{KEYCLOAK_PUBLIC_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect"
+REALM_ROOT = f"{KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}"
 
 app = FastAPI(title="bionicpro-auth", version="1.0.0")
 
@@ -54,7 +58,43 @@ app.add_middleware(
 
 
 # ---------------------------------------------------------------------------
-# In-memory stores (encrypted refresh tokens)
+# Profile DB (consent + Yandex profile)
+# ---------------------------------------------------------------------------
+
+
+def _init_db() -> None:
+    Path(PROFILE_DB_PATH).parent.mkdir(parents=True, exist_ok=True)
+    with _db() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_profiles (
+                user_sub TEXT PRIMARY KEY,
+                consent_granted INTEGER NOT NULL DEFAULT 0,
+                yandex_profile_json TEXT,
+                updated_at REAL NOT NULL
+            )
+            """
+        )
+
+
+@contextmanager
+def _db() -> Iterator[sqlite3.Connection]:
+    conn = sqlite3.connect(PROFILE_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+        conn.commit()
+    finally:
+        conn.close()
+
+
+@app.on_event("startup")
+def on_startup() -> None:
+    _init_db()
+
+
+# ---------------------------------------------------------------------------
+# Session store
 # ---------------------------------------------------------------------------
 
 
@@ -62,14 +102,12 @@ app.add_middleware(
 class SessionData:
     access_token: str
     refresh_token_encrypted: bytes
-    expires_at: float  # access token expiry (unix)
+    expires_at: float
     userinfo: dict[str, Any] = field(default_factory=dict)
     created_at: float = field(default_factory=time.time)
 
 
-# session_id -> SessionData
 _sessions: dict[str, SessionData] = {}
-# temporary PKCE state: state -> {code_verifier, created_at}
 _pending_pkce: dict[str, dict[str, Any]] = {}
 
 
@@ -145,17 +183,51 @@ async def _refresh_access_token(session: SessionData) -> None:
 
 
 async def _ensure_fresh_access(session: SessionData) -> None:
-    # refresh ~10s before expiry
     if time.time() >= session.expires_at - 10:
         await _refresh_access_token(session)
 
 
 def _rotate_session(old_id: str, session: SessionData) -> str:
-    """Re-bind tokens to a new session id (anti session-fixation)."""
     new_id = _new_session_id()
     _sessions[new_id] = session
     _sessions.pop(old_id, None)
     return new_id
+
+
+def _profile_row(user_sub: str) -> sqlite3.Row | None:
+    with _db() as conn:
+        return conn.execute(
+            "SELECT * FROM user_profiles WHERE user_sub = ?", (user_sub,)
+        ).fetchone()
+
+
+async def _fetch_yandex_profile(access_token: str) -> dict[str, Any]:
+    """Pull profile from Yandex using stored broker token (or fallback to userinfo)."""
+    async with httpx.AsyncClient() as client:
+        broker = await client.get(
+            f"{REALM_ROOT}/broker/{YANDEX_IDP_ALIAS}/token",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        if broker.status_code == 200:
+            broker_payload = broker.json()
+            yandex_token = broker_payload.get("access_token")
+            if yandex_token:
+                info = await client.get(
+                    "https://login.yandex.ru/info",
+                    params={"format": "json"},
+                    headers={"Authorization": f"OAuth {yandex_token}"},
+                )
+                if info.status_code == 200:
+                    return info.json()
+
+        # Fallback: Keycloak userinfo (mapped claims)
+        ui = await client.get(
+            f"{REALM_BASE}/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        if ui.status_code == 200:
+            return ui.json()
+    return {}
 
 
 # ---------------------------------------------------------------------------
@@ -169,13 +241,13 @@ async def health() -> dict[str, str]:
 
 
 @app.get("/auth/login")
-async def login() -> RedirectResponse:
-    """Start Authorization Code + PKCE flow against Keycloak."""
+async def login(idp: str | None = None) -> RedirectResponse:
+    """Start Authorization Code + PKCE. Optional ?idp=yandex for broker hint."""
     state = secrets.token_urlsafe(24)
     verifier, challenge = _pkce_pair()
     _pending_pkce[state] = {"code_verifier": verifier, "created_at": time.time()}
 
-    params = {
+    params: dict[str, str] = {
         "client_id": CLIENT_ID,
         "response_type": "code",
         "scope": "openid profile email",
@@ -184,11 +256,20 @@ async def login() -> RedirectResponse:
         "code_challenge": challenge,
         "code_challenge_method": "S256",
     }
+    if idp:
+        params["kc_idp_hint"] = idp
     return RedirectResponse(f"{REALM_PUBLIC}/auth?{urlencode(params)}")
 
 
+@app.get("/auth/login/yandex")
+async def login_yandex() -> RedirectResponse:
+    return await login(idp=YANDEX_IDP_ALIAS)
+
+
 @app.get("/auth/callback")
-async def callback(code: str | None = None, state: str | None = None, error: str | None = None) -> RedirectResponse:
+async def callback(
+    code: str | None = None, state: str | None = None, error: str | None = None
+) -> RedirectResponse:
     if error:
         return RedirectResponse(f"{FRONTEND_URL}/?error={error}")
     if not code or not state or state not in _pending_pkce:
@@ -210,7 +291,9 @@ async def callback(code: str | None = None, state: str | None = None, error: str
             },
         )
         if token_resp.status_code != 200:
-            raise HTTPException(status_code=401, detail=f"Token exchange failed: {token_resp.text}")
+            raise HTTPException(
+                status_code=401, detail=f"Token exchange failed: {token_resp.text}"
+            )
 
         tokens = token_resp.json()
         access = tokens["access_token"]
@@ -232,14 +315,21 @@ async def callback(code: str | None = None, state: str | None = None, error: str
         userinfo=userinfo,
     )
 
-    response = RedirectResponse(url=FRONTEND_URL, status_code=302)
+    # Ask for profile-data consent when not yet granted
+    sub = userinfo.get("sub")
+    needs_consent = True
+    if sub:
+        row = _profile_row(sub)
+        needs_consent = not (row and row["consent_granted"])
+
+    dest = f"{FRONTEND_URL}/?consent=1" if needs_consent else FRONTEND_URL
+    response = RedirectResponse(url=dest, status_code=302)
     _set_session_cookie(response, session_id)
     return response
 
 
 @app.get("/auth/me")
 async def me(request: Request) -> JSONResponse:
-    """Return current user; rotates session id on success (anti fixation)."""
     old_id = request.cookies.get(COOKIE_NAME)
     session = _get_session(old_id)
     if not session or not old_id:
@@ -247,12 +337,18 @@ async def me(request: Request) -> JSONResponse:
 
     await _ensure_fresh_access(session)
     new_id = _rotate_session(old_id, session)
+    sub = session.userinfo.get("sub")
+    row = _profile_row(sub) if sub else None
+    consent = bool(row and row["consent_granted"])
+    profile = json.loads(row["yandex_profile_json"]) if row and row["yandex_profile_json"] else None
 
     body = {
         "authenticated": True,
         "session_id": new_id,
+        "consent_granted": consent,
+        "profile": profile,
         "user": {
-            "sub": session.userinfo.get("sub"),
+            "sub": sub,
             "username": session.userinfo.get("preferred_username"),
             "email": session.userinfo.get("email"),
             "name": session.userinfo.get("name"),
@@ -263,12 +359,105 @@ async def me(request: Request) -> JSONResponse:
     return response
 
 
+@app.get("/auth/consent")
+async def consent_status(request: Request) -> JSONResponse:
+    old_id = request.cookies.get(COOKIE_NAME)
+    session = _get_session(old_id)
+    if not session or not old_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    await _ensure_fresh_access(session)
+    sub = session.userinfo.get("sub")
+    row = _profile_row(sub) if sub else None
+    return JSONResponse(
+        {
+            "consent_granted": bool(row and row["consent_granted"]),
+            "has_profile": bool(row and row["yandex_profile_json"]),
+        }
+    )
+
+
+@app.post("/auth/consent/accept")
+async def consent_accept(request: Request) -> JSONResponse:
+    """User allows storing Yandex profile → fetch from Yandex and save to DB."""
+    old_id = request.cookies.get(COOKIE_NAME)
+    session = _get_session(old_id)
+    if not session or not old_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    await _ensure_fresh_access(session)
+    sub = session.userinfo.get("sub")
+    if not sub:
+        raise HTTPException(status_code=400, detail="Missing user sub")
+
+    profile = await _fetch_yandex_profile(session.access_token)
+    with _db() as conn:
+        conn.execute(
+            """
+            INSERT INTO user_profiles (user_sub, consent_granted, yandex_profile_json, updated_at)
+            VALUES (?, 1, ?, ?)
+            ON CONFLICT(user_sub) DO UPDATE SET
+              consent_granted = 1,
+              yandex_profile_json = excluded.yandex_profile_json,
+              updated_at = excluded.updated_at
+            """,
+            (sub, json.dumps(profile, ensure_ascii=False), time.time()),
+        )
+
+    new_id = _rotate_session(old_id, session)
+    response = JSONResponse({"ok": True, "profile": profile, "session_id": new_id})
+    _set_session_cookie(response, new_id)
+    return response
+
+
+@app.post("/auth/consent/deny")
+async def consent_deny(request: Request) -> JSONResponse:
+    old_id = request.cookies.get(COOKIE_NAME)
+    session = _get_session(old_id)
+    if not session or not old_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    await _ensure_fresh_access(session)
+    sub = session.userinfo.get("sub")
+    if sub:
+        with _db() as conn:
+            conn.execute(
+                """
+                INSERT INTO user_profiles (user_sub, consent_granted, yandex_profile_json, updated_at)
+                VALUES (?, 0, NULL, ?)
+                ON CONFLICT(user_sub) DO UPDATE SET
+                  consent_granted = 0,
+                  yandex_profile_json = NULL,
+                  updated_at = excluded.updated_at
+                """,
+                (sub, time.time()),
+            )
+
+    new_id = _rotate_session(old_id, session)
+    response = JSONResponse({"ok": True, "consent_granted": False, "session_id": new_id})
+    _set_session_cookie(response, new_id)
+    return response
+
+
+@app.get("/auth/profile")
+async def get_profile(request: Request) -> JSONResponse:
+    old_id = request.cookies.get(COOKIE_NAME)
+    session = _get_session(old_id)
+    if not session or not old_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    await _ensure_fresh_access(session)
+    sub = session.userinfo.get("sub")
+    row = _profile_row(sub) if sub else None
+    if not row or not row["consent_granted"]:
+        raise HTTPException(status_code=403, detail="Consent required")
+    profile = json.loads(row["yandex_profile_json"]) if row["yandex_profile_json"] else {}
+    new_id = _rotate_session(old_id, session)
+    response = JSONResponse({"profile": profile, "session_id": new_id})
+    _set_session_cookie(response, new_id)
+    return response
+
+
 @app.get("/auth/session")
 async def validate_session(request: Request) -> JSONResponse:
-    """
-    Protected resource check used by other services / FE.
-    Ensures fresh access_token and rotates session id.
-    """
     old_id = request.cookies.get(COOKIE_NAME)
     session = _get_session(old_id)
     if not session or not old_id:
@@ -289,8 +478,6 @@ async def validate_session(request: Request) -> JSONResponse:
                 if isinstance(session.userinfo.get("realm_access"), dict)
                 else [],
             },
-            # access_token is NOT returned to the browser — only for internal callers
-            # that share the same trust boundary would use a separate internal API.
         }
     )
     _set_session_cookie(response, new_id)
@@ -299,11 +486,6 @@ async def validate_session(request: Request) -> JSONResponse:
 
 @app.get("/auth/token")
 async def internal_access_token(request: Request) -> JSONResponse:
-    """
-    Internal helper for trusted backend services (reports-api).
-    Still rotates session. Never call this from the browser in production
-    without network isolation; for the course it is cookie-gated.
-    """
     old_id = request.cookies.get(COOKIE_NAME)
     session = _get_session(old_id)
     if not session or not old_id:
