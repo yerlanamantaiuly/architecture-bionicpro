@@ -1,0 +1,7 @@
+/postgres-keycloak-data
+2024__yandex-architecture-sso.code-workspace
+zadanie
+diagrammac4.png
+secrets/yandex.env
+**/__pycache__/
+*.db

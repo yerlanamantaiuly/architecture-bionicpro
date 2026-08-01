@@ -1,0 +1,24 @@
+<clickhouse>
+  <users>
+    <default>
+      <password remove="1"/>
+      <password_sha256_hex remove="1"/>
+      <password></password>
+      <networks>
+        <ip>::/0</ip>
+      </networks>
+      <profile>default</profile>
+      <quota>default</quota>
+      <access_management>1</access_management>
+    </default>
+    <bionic>
+      <password>bionic</password>
+      <networks>
+        <ip>::/0</ip>
+      </networks>
+      <profile>default</profile>
+      <quota>default</quota>
+      <access_management>1</access_management>
+    </bionic>
+  </users>
+</clickhouse>

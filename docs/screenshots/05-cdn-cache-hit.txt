@@ -1,0 +1,14 @@
+# CDN proof: Nginx X-Cache-Status (Assignment 3)
+# URL: http://10.2.67.21:8088/cdn/reports/prothetic1/2026-07-19_2026-08-01_wm-2026-08-01.json
+
+=== First request ===
+HTTP/1.1 200 OK
+Content-Type: application/json
+X-Cache-Status: MISS
+X-CDN-Node: bionicpro-nginx-cdn
+
+=== Second request ===
+HTTP/1.1 200 OK
+Content-Type: application/json
+X-Cache-Status: HIT
+X-CDN-Node: bionicpro-nginx-cdn

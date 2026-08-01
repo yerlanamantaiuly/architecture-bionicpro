@@ -1,0 +1,314 @@
+{
+  "realm": "reports-realm",
+  "enabled": true,
+  "accessTokenLifespan": 120,
+  "accessTokenLifespanForImplicitFlow": 120,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "offlineSessionIdleTimeout": 2592000,
+  "accessCodeLifespan": 60,
+  "accessCodeLifespanUserAction": 300,
+  "accessCodeLifespanLogin": 1800,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+  "otpPolicyType": "totp",
+  "otpPolicyAlgorithm": "HmacSHA1",
+  "otpPolicyInitialCounter": 0,
+  "otpPolicyDigits": 6,
+  "otpPolicyLookAheadWindow": 1,
+  "otpPolicyPeriod": 30,
+  "otpSupportedApplications": ["FreeOTP", "Google Authenticator"],
+  "browserFlow": "browser",
+  "requiredActions": [
+    {
+      "alias": "CONFIGURE_TOTP",
+      "name": "Configure OTP",
+      "providerId": "CONFIGURE_TOTP",
+      "enabled": true,
+      "defaultAction": true,
+      "priority": 10,
+      "config": {}
+    },
+    {
+      "alias": "UPDATE_PASSWORD",
+      "name": "Update Password",
+      "providerId": "UPDATE_PASSWORD",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 30,
+      "config": {}
+    },
+    {
+      "alias": "UPDATE_PROFILE",
+      "name": "Update Profile",
+      "providerId": "UPDATE_PROFILE",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 40,
+      "config": {}
+    }
+  ],
+  "roles": {
+    "realm": [
+      {
+        "name": "user",
+        "description": "Regular user role"
+      },
+      {
+        "name": "administrator",
+        "description": "Administrator role"
+      },
+      {
+        "name": "prothetic_user",
+        "description": "Prothetic user role with report access"
+      }
+    ]
+  },
+  "users": [
+    {
+      "username": "user1",
+      "enabled": true,
+      "email": "user1@example.com",
+      "firstName": "User",
+      "lastName": "One",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["user"]
+    },
+    {
+      "username": "user2",
+      "enabled": true,
+      "email": "user2@example.com",
+      "firstName": "User",
+      "lastName": "Two",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["user"]
+    },
+    {
+      "username": "admin1",
+      "enabled": true,
+      "email": "admin1@example.com",
+      "firstName": "Admin",
+      "lastName": "One",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["administrator"]
+    },
+    {
+      "username": "prothetic1",
+      "enabled": true,
+      "email": "prothetic1@example.com",
+      "firstName": "Prothetic",
+      "lastName": "One",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "prothetic123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["prothetic_user"]
+    },
+    {
+      "username": "prothetic2",
+      "enabled": true,
+      "email": "prothetic2@example.com",
+      "firstName": "Prothetic",
+      "lastName": "Two",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "prothetic123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["prothetic_user"]
+    },
+    {
+      "username": "prothetic3",
+      "enabled": true,
+      "email": "prothetic3@example.com",
+      "firstName": "Prothetic",
+      "lastName": "Three",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "prothetic123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["prothetic_user"]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "bionicpro-auth",
+      "name": "BionicPRO Auth BFF",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "bionicpro-auth-secret",
+      "clientAuthenticatorType": "client-secret",
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": true,
+      "redirectUris": [
+        "http://10.2.67.21:8001/auth/callback",
+        "http://localhost:8001/auth/callback"
+      ],
+      "webOrigins": [
+        "http://10.2.67.21:8001",
+        "http://10.2.67.21:3000",
+        "http://localhost:8001",
+        "http://localhost:3000"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    },
+    {
+      "clientId": "reports-frontend",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": true,
+      "redirectUris": [
+        "http://10.2.67.21:3000/*",
+        "http://localhost:3000/*"
+      ],
+      "webOrigins": [
+        "http://10.2.67.21:3000",
+        "http://localhost:3000"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    },
+    {
+      "clientId": "reports-api",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "oNwoLQdvJAvRcL89SydqCWCe5ry1jMgq",
+      "bearerOnly": true
+    }
+  ],
+  "components": {
+    "org.keycloak.storage.UserStorageProvider": [
+      {
+        "name": "ldap-bionicpro",
+        "providerId": "ldap",
+        "subComponents": {
+          "org.keycloak.storage.ldap.mappers.LDAPStorageMapper": [
+            {
+              "name": "username",
+              "providerId": "user-attribute-ldap-mapper",
+              "config": {
+                "ldap.attribute": ["uid"],
+                "is.mandatory.in.ldap": ["true"],
+                "always.read.value.from.ldap": ["false"],
+                "read.only": ["true"],
+                "user.model.attribute": ["username"]
+              }
+            },
+            {
+              "name": "email",
+              "providerId": "user-attribute-ldap-mapper",
+              "config": {
+                "ldap.attribute": ["mail"],
+                "is.mandatory.in.ldap": ["false"],
+                "always.read.value.from.ldap": ["false"],
+                "read.only": ["true"],
+                "user.model.attribute": ["email"]
+              }
+            },
+            {
+              "name": "first name",
+              "providerId": "user-attribute-ldap-mapper",
+              "config": {
+                "ldap.attribute": ["cn"],
+                "is.mandatory.in.ldap": ["false"],
+                "always.read.value.from.ldap": ["false"],
+                "read.only": ["true"],
+                "user.model.attribute": ["firstName"]
+              }
+            },
+            {
+              "name": "last name",
+              "providerId": "user-attribute-ldap-mapper",
+              "config": {
+                "ldap.attribute": ["sn"],
+                "is.mandatory.in.ldap": ["false"],
+                "always.read.value.from.ldap": ["false"],
+                "read.only": ["true"],
+                "user.model.attribute": ["lastName"]
+              }
+            },
+            {
+              "name": "realm-roles",
+              "providerId": "role-ldap-mapper",
+              "config": {
+                "roles.dn": ["ou=Groups,dc=example,dc=com"],
+                "role.name.ldap.attribute": ["cn"],
+                "role.object.classes": ["groupOfNames"],
+                "membership.ldap.attribute": ["member"],
+                "membership.attribute.type": ["DN"],
+                "membership.user.ldap.attribute": ["uid"],
+                "mode": ["READ_ONLY"],
+                "user.roles.retrieve.strategy": ["LOAD_ROLES_BY_MEMBER_ATTRIBUTE"],
+                "memberof.ldap.attribute": ["memberOf"],
+                "use.realm.roles.mapping": ["true"]
+              }
+            }
+          ]
+        },
+        "config": {
+          "enabled": ["true"],
+          "priority": ["0"],
+          "fullSyncPeriod": ["-1"],
+          "changedSyncPeriod": ["-1"],
+          "cachePolicy": ["DEFAULT"],
+          "batchSizeForSync": ["1000"],
+          "editMode": ["READ_ONLY"],
+          "syncRegistrations": ["false"],
+          "vendor": ["other"],
+          "usernameLDAPAttribute": ["uid"],
+          "rdnLDAPAttribute": ["uid"],
+          "uuidLDAPAttribute": ["entryUUID"],
+          "userObjectClasses": ["inetOrgPerson, organizationalPerson"],
+          "connectionUrl": ["ldap://ldap:389"],
+          "usersDn": ["ou=People,dc=example,dc=com"],
+          "authType": ["simple"],
+          "bindDn": ["cn=admin,dc=example,dc=com"],
+          "bindCredential": ["admin"],
+          "searchScope": ["1"],
+          "useTruststoreSpi": ["ldapsOnly"],
+          "connectionPooling": ["true"],
+          "pagination": ["true"],
+          "importEnabled": ["true"],
+          "trustEmail": ["true"]
+        }
+      }
+    ]
+  }
+}
