@@ -1,12 +1,16 @@
-"""reports-api — serve pre-aggregated prosthesis usage reports from ClickHouse."""
+"""reports-api — ClickHouse mart + S3/CDN cache-aside for prosthesis usage reports."""
 
 from __future__ import annotations
 
+import json
 import os
 from datetime import date, datetime, timedelta
 from typing import Any
 
+import boto3
 import httpx
+from botocore.client import Config
+from botocore.exceptions import ClientError
 from clickhouse_driver import Client as CHClient
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,7 +27,17 @@ CH_USER = os.getenv("CLICKHOUSE_USER", "default")
 CH_PASSWORD = os.getenv("CLICKHOUSE_PASSWORD", "")
 CH_DB = os.getenv("CLICKHOUSE_DB", "bionicpro")
 
-app = FastAPI(title="reports-api", version="1.0.0")
+# S3 / MinIO
+S3_ENDPOINT = os.getenv("S3_ENDPOINT", "http://minio:9000")
+S3_ACCESS_KEY = os.getenv("S3_ACCESS_KEY", "minioadmin")
+S3_SECRET_KEY = os.getenv("S3_SECRET_KEY", "minioadmin")
+S3_BUCKET = os.getenv("S3_BUCKET", "bionicpro-reports")
+S3_REGION = os.getenv("S3_REGION", "us-east-1")
+
+# Public CDN base (Nginx)
+CDN_PUBLIC_URL = os.getenv("CDN_PUBLIC_URL", f"http://{PUBLIC_HOST}:8088")
+
+app = FastAPI(title="reports-api", version="1.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -45,6 +59,50 @@ def _ch() -> CHClient:
         user=CH_USER,
         password=CH_PASSWORD or "",
         database=CH_DB,
+    )
+
+
+def _s3():
+    return boto3.client(
+        "s3",
+        endpoint_url=S3_ENDPOINT,
+        aws_access_key_id=S3_ACCESS_KEY,
+        aws_secret_access_key=S3_SECRET_KEY,
+        region_name=S3_REGION,
+        config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
+    )
+
+
+def _object_key(username: str, start: date, end: date, watermark: date) -> str:
+    """
+    Versioned key: watermark in path → ETL bump = new object = CDN miss (invalidation).
+    Structure for fast lookup by user + period.
+    """
+    return (
+        f"reports/{username}/"
+        f"{start.isoformat()}_{end.isoformat()}_wm-{watermark.isoformat()}.json"
+    )
+
+
+def _cdn_url(key: str) -> str:
+    return f"{CDN_PUBLIC_URL.rstrip('/')}/cdn/{key}"
+
+
+def _s3_exists(key: str) -> bool:
+    try:
+        _s3().head_object(Bucket=S3_BUCKET, Key=key)
+        return True
+    except ClientError:
+        return False
+
+
+def _s3_put_json(key: str, body: dict[str, Any]) -> None:
+    _s3().put_object(
+        Bucket=S3_BUCKET,
+        Key=key,
+        Body=json.dumps(body, ensure_ascii=False, indent=2).encode("utf-8"),
+        ContentType="application/json",
+        CacheControl="public, max-age=3600",
     )
 
 
@@ -87,56 +145,7 @@ def _watermark() -> date | None:
     return value
 
 
-@app.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
-
-
-@app.get("/reports")
-async def get_report(
-    request: Request,
-    date_from: date | None = Query(default=None, description="Inclusive start date"),
-    date_to: date | None = Query(default=None, description="Inclusive end date"),
-    user_id: str | None = Query(
-        default=None,
-        description="Ignored unless equal to current user (ACL)",
-    ),
-) -> JSONResponse:
-    """
-    Return pre-aggregated report for the authenticated user only.
-    Data comes from ClickHouse mart (no heavy runtime aggregation).
-    """
-    user = await _current_user(request)
-    username = user["username"]
-
-    # ACL: only own report
-    if user_id and user_id not in {username, user.get("sub")}:
-        raise HTTPException(
-            status_code=403,
-            detail="Access denied: you can only request your own report",
-        )
-
-    wm = _watermark()
-    if wm is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Report data is not ready yet (ETL has not produced a watermark)",
-        )
-
-    end = date_to or wm
-    start = date_from or (end - timedelta(days=13))
-
-    if end > wm:
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                f"Requested period is not fully processed by Airflow yet. "
-                f"Latest available date: {wm.isoformat()}"
-            ),
-        )
-    if start > end:
-        raise HTTPException(status_code=400, detail="date_from must be <= date_to")
-
+def _build_report(username: str, start: date, end: date, wm: date) -> dict[str, Any]:
     rows = _ch().execute(
         """
         SELECT
@@ -183,15 +192,13 @@ async def get_report(
     summary = {
         "steps_count": sum(d["steps_count"] for d in daily),
         "active_minutes": sum(d["active_minutes"] for d in daily),
-        "battery_avg": round(
-            sum(d["battery_avg"] for d in daily) / len(daily), 2
-        ),
+        "battery_avg": round(sum(d["battery_avg"] for d in daily) / len(daily), 2),
         "load_cycles": sum(d["load_cycles"] for d in daily),
         "fall_events": sum(d["fall_events"] for d in daily),
         "days": len(daily),
     }
 
-    body = {
+    return {
         "user": {
             "username": rows[0][0],
             "full_name": rows[0][1],
@@ -209,4 +216,97 @@ async def get_report(
         "generated_at": datetime.utcnow().isoformat() + "Z",
         "source": "clickhouse.bionicpro.user_report_mart",
     }
-    return JSONResponse(content=body)
+
+
+@app.get("/health")
+async def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.get("/reports")
+async def get_report(
+    request: Request,
+    date_from: date | None = Query(default=None, description="Inclusive start date"),
+    date_to: date | None = Query(default=None, description="Inclusive end date"),
+    user_id: str | None = Query(
+        default=None,
+        description="Ignored unless equal to current user (ACL)",
+    ),
+) -> JSONResponse:
+    """
+    Cache-aside:
+      1) resolve period + watermark
+      2) if object exists in S3 → return CDN URL (no ClickHouse hit)
+      3) else generate from mart, put to S3, return CDN URL
+    """
+    user = await _current_user(request)
+    username = user["username"]
+
+    if user_id and user_id not in {username, user.get("sub")}:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: you can only request your own report",
+        )
+
+    wm = _watermark()
+    if wm is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Report data is not ready yet (ETL has not produced a watermark)",
+        )
+
+    end = date_to or wm
+    start = date_from or (end - timedelta(days=13))
+
+    if end > wm:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"Requested period is not fully processed by Airflow yet. "
+                f"Latest available date: {wm.isoformat()}"
+            ),
+        )
+    if start > end:
+        raise HTTPException(status_code=400, detail="date_from must be <= date_to")
+
+    key = _object_key(username, start, end, wm)
+    cdn_url = _cdn_url(key)
+
+    if _s3_exists(key):
+        return JSONResponse(
+            content={
+                "cache": "HIT",
+                "storage": "s3",
+                "cdn_url": cdn_url,
+                "s3_key": key,
+                "user": {"username": username},
+                "period": {
+                    "date_from": start.isoformat(),
+                    "date_to": end.isoformat(),
+                    "etl_watermark": wm.isoformat(),
+                },
+                "message": "Report served from S3 via CDN (ClickHouse not queried)",
+            }
+        )
+
+    # MISS → generate from OLAP, store, return CDN link
+    report = _build_report(username, start, end, wm)
+    report["s3_key"] = key
+    report["cdn_url"] = cdn_url
+    _s3_put_json(key, report)
+
+    return JSONResponse(
+        content={
+            "cache": "MISS",
+            "storage": "s3",
+            "cdn_url": cdn_url,
+            "s3_key": key,
+            "user": report["user"],
+            "period": report["period"],
+            "summary": report["summary"],
+            "daily": report["daily"],
+            "generated_at": report["generated_at"],
+            "source": report["source"],
+            "message": "Report generated from ClickHouse, stored in S3, available via CDN",
+        }
+    )

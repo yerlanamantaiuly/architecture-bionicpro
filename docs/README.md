@@ -42,6 +42,15 @@
 |-------|----------|
 | [screenshots/04-reports-ui-prothetic1.png](screenshots/04-reports-ui-prothetic1.png) | UI Usage Reports, signed in as `prothetic1` |
 
+## Задание 3 — S3 + CDN
+
+См. [cdn.md](cdn.md). Доказательство CDN: `X-Cache-Status: MISS` → `HIT` на `http://HOST:8088/cdn/...`.
+
+| Скрин | Описание |
+|-------|----------|
+| [screenshots/05-cdn-cache-hit.png](screenshots/05-cdn-cache-hit.png) | Терминал: MISS → HIT |
+| [screenshots/05-cdn-cache-hit.txt](screenshots/05-cdn-cache-hit.txt) | Тот же вывод текстом |
+
 ## Экспорт realm (чеклист сдачи)
 
 После всех настроек Keycloak:

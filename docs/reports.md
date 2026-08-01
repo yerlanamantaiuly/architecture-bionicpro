@@ -38,3 +38,9 @@ docker compose up -d --build source-db clickhouse airflow-init airflow reports-a
 Авторизованный UI отчётов под `prothetic1` (сессия + кнопка Download Report):
 
 ![Usage Reports — prothetic1](screenshots/04-reports-ui-prothetic1.png)
+
+## Задание 3 (S3/CDN)
+
+После первого `GET /reports` объект кладётся в MinIO, ответ содержит `cdn_url`.  
+Повторный запрос — `cache: HIT` без обращения к ClickHouse.  
+Как показать CDN-кеш Nginx: [cdn.md](cdn.md).

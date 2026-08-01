@@ -135,8 +135,37 @@ const ReportPage: React.FC = () => {
 
       const data = (await response.json()) as {
         user?: { username?: string };
+        cdn_url?: string;
+        cache?: string;
       } & Record<string, unknown>;
       setReport(data);
+
+      // Prefer CDN URL (Assignment 3); fallback to inline JSON download
+      if (data.cdn_url) {
+        const cdnResp = await fetch(data.cdn_url);
+        if (cdnResp.ok) {
+          const cacheStatus = cdnResp.headers.get('X-Cache-Status') || 'n/a';
+          const payload = await cdnResp.json();
+          setReport({
+            ...data,
+            cdn_cache_status: cacheStatus,
+            report: payload,
+          });
+          const blob = new Blob([JSON.stringify(payload, null, 2)], {
+            type: 'application/json',
+          });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          const uname = data.user?.username || 'user';
+          a.download = `bionicpro-report-${uname}.json`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+          return;
+        }
+      }
 
       const blob = new Blob([JSON.stringify(data, null, 2)], {
         type: 'application/json',
