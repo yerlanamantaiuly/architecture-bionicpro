@@ -18,6 +18,7 @@ const ReportPage: React.FC = () => {
   const [profile, setProfile] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [report, setReport] = useState<Record<string, unknown> | null>(null);
 
   const checkSession = useCallback(async () => {
     try {
@@ -105,6 +106,7 @@ const ReportPage: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
+      setReport(null);
 
       const sessionCheck = await fetch(`${AUTH_URL}/auth/session`, {
         credentials: 'include',
@@ -120,9 +122,34 @@ const ReportPage: React.FC = () => {
       });
 
       if (!response.ok) {
-        setError(`Report request failed: ${response.status}`);
+        let detail = `Report request failed: ${response.status}`;
+        try {
+          const body = await response.json();
+          if (body?.detail) detail = String(body.detail);
+        } catch {
+          /* ignore */
+        }
+        setError(detail);
         return;
       }
+
+      const data = (await response.json()) as {
+        user?: { username?: string };
+      } & Record<string, unknown>;
+      setReport(data);
+
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: 'application/json',
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const uname = data.user?.username || 'user';
+      a.download = `bionicpro-report-${uname}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -219,6 +246,12 @@ const ReportPage: React.FC = () => {
             Logout
           </button>
         </div>
+
+        {report && (
+          <pre className="mt-4 text-xs bg-gray-50 p-3 rounded overflow-auto max-h-64">
+            {JSON.stringify(report, null, 2)}
+          </pre>
+        )}
 
         {error && (
           <div className="mt-4 p-4 bg-red-100 text-red-700 rounded">{error}</div>

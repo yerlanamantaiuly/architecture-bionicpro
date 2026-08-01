@@ -112,3 +112,137 @@ services:
       - "3000:3000"
     depends_on:
       - bionicpro-auth
+      - reports-api
+
+  # ---- Assignment 2: reports ETL + API ----
+  source-db:
+    image: postgres:14
+    environment:
+      POSTGRES_DB: bionicpro
+      POSTGRES_USER: bionic
+      POSTGRES_PASSWORD: bionic
+    ports:
+      - "5434:5432"
+    volumes:
+      - ./source-db/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+      - source-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bionic -d bionicpro"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./clickhouse/users.d/default-user.xml:/etc/clickhouse-server/users.d/default-user.xml:ro
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD-SHELL", "clickhouse-client --query 'SELECT 1'"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  clickhouse-init:
+    image: clickhouse/clickhouse-server:24.3
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    volumes:
+      - ./clickhouse/init/01_schema.sql:/schema.sql:ro
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        set -e
+        clickhouse-client --host clickhouse --multiquery < /schema.sql
+        echo "ClickHouse schema applied"
+    restart: "no"
+
+  airflow:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    depends_on:
+      source-db:
+        condition: service_healthy
+      clickhouse-init:
+        condition: service_completed_successfully
+    environment:
+      AIRFLOW_HOME: /opt/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
+      SOURCE_DB_HOST: source-db
+      SOURCE_DB_PORT: "5432"
+      SOURCE_DB_NAME: bionicpro
+      SOURCE_DB_USER: bionic
+      SOURCE_DB_PASSWORD: bionic
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: "9000"
+      CLICKHOUSE_DB: bionicpro
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ""
+      AIRFLOW_CREDENTIALS: admin:admin
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - airflow-logs:/opt/airflow/logs
+    ports:
+      - "8085:8080"
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        airflow db migrate
+        airflow users create \
+          --username admin --password admin \
+          --firstname Admin --lastname Bionic \
+          --role Admin --email admin@example.com || true
+        ( sleep 30
+          airflow dags unpause bionicpro_reports_etl || true
+          airflow dags trigger bionicpro_reports_etl || true
+        ) &
+        airflow scheduler &
+        exec airflow webserver --port 8080
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 20
+      start_period: 90s
+
+  reports-api:
+    build:
+      context: ./reports-api
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      AUTH_URL: http://bionicpro-auth:8001
+      COOKIE_NAME: bionicpro_session
+      FRONTEND_URL: http://${PUBLIC_HOST:-10.2.67.21}:3000
+      PUBLIC_HOST: ${PUBLIC_HOST:-10.2.67.21}
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: "9000"
+      CLICKHOUSE_DB: bionicpro
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ""
+    depends_on:
+      clickhouse-init:
+        condition: service_completed_successfully
+      bionicpro-auth:
+        condition: service_started
+
+volumes:
+  source-db-data:
+  clickhouse-data:
+  airflow-logs:

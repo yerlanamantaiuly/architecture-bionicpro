@@ -34,6 +34,14 @@
 | [screenshots/02-yandex-consent.png](screenshots/02-yandex-consent.png) | Consent на данные профиля |
 | [screenshots/03-yandex-profile-ui.png](screenshots/03-yandex-profile-ui.png) | Профиль Яндекс ID в UI |
 
+## Задание 2 — сервис отчётов
+
+См. [reports.md](reports.md). Диаграмма: [reports-c4.drawio](reports-c4.drawio) / [reports-c4.png](reports-c4.png).
+
+| Скрин | Описание |
+|-------|----------|
+| [screenshots/04-reports-ui-prothetic1.png](screenshots/04-reports-ui-prothetic1.png) | UI Usage Reports, signed in as `prothetic1` |
+
 ## Экспорт realm (чеклист сдачи)
 
 После всех настроек Keycloak:

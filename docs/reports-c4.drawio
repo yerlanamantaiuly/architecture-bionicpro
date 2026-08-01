@@ -1,0 +1,104 @@
+<mxfile host="app.diagrams.net" modified="2026-08-01T10:50:00.000Z" agent="BionicPRO Sprint 9" version="22.1.0" type="device">
+  <diagram id="reports-c4" name="BionicPRO Reports C4">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="BionicPRO — C4 Container: подготовка и получение отчётов (Задание 2 / Задача 1)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontStyle=1;fontSize=18;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="1100" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="ETL (Airflow): CRM + телеметрия → витрина в ClickHouse. API /reports читает только готовую витрину; доступ — только к своему отчёту." style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=12;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="40" y="50" width="1100" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="person" value="&lt;b&gt;Пилот протеза&lt;/b&gt;&lt;br&gt;[Person]&lt;br&gt;Запрашивает свой&lt;br&gt;usage-отчёт в UI" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#08427b;fontColor=#ffffff;strokeColor=#073B6F;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="280" width="150" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="sys" value="BionicPRO Reports [Software System]" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E8F4FC;strokeColor=#6C8EBF;dashed=1;dashPattern=8 8;verticalAlign=top;fontStyle=1;fontSize=13;align=left;spacingLeft=10;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="220" y="90" width="1120" height="780" as="geometry" />
+        </mxCell>
+
+        <mxCell id="fe" value="&lt;b&gt;Frontend (Reports UI)&lt;/b&gt;&lt;br&gt;[Container: React]&lt;br&gt;Кнопка Download Report.&lt;br&gt;Session cookie → API.&lt;br&gt;Без токенов IdP." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#23A2D9;fontColor=#ffffff;strokeColor=#0E7DAD;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="260" y="150" width="200" height="110" as="geometry" />
+        </mxCell>
+
+        <mxCell id="auth" value="&lt;b&gt;bionicpro-auth&lt;/b&gt;&lt;br&gt;[Container: BFF]&lt;br&gt;Валидация сессии.&lt;br&gt;Возвращает username/sub&lt;br&gt;для ACL в reports-api." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#23A2D9;fontColor=#ffffff;strokeColor=#0E7DAD;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="520" y="150" width="200" height="110" as="geometry" />
+        </mxCell>
+
+        <mxCell id="api" value="&lt;b&gt;reports-api&lt;/b&gt;&lt;br&gt;[Container: FastAPI]&lt;br&gt;GET /reports&lt;br&gt;Проверяет сессию.&lt;br&gt;ACL: только свой отчёт.&lt;br&gt;Читает витрину OLAP&lt;br&gt;(без тяжёлых join в runtime)." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#23A2D9;fontColor=#ffffff;strokeColor=#0E7DAD;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="260" y="320" width="220" height="140" as="geometry" />
+        </mxCell>
+
+        <mxCell id="airflow" value="&lt;b&gt;Apache Airflow&lt;/b&gt;&lt;br&gt;[Container: ETL]&lt;br&gt;DAG по расписанию:&lt;br&gt;1) extract CRM&lt;br&gt;2) extract telemetry&lt;br&gt;3) load staging CH&lt;br&gt;4) build user_report_mart&lt;br&gt;5) update watermark" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#23A2D9;fontColor=#ffffff;strokeColor=#0E7DAD;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="560" y="300" width="230" height="170" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ch" value="&lt;b&gt;ClickHouse (OLAP)&lt;/b&gt;&lt;br&gt;[Container]&lt;br&gt;staging: crm_clients,&lt;br&gt;telemetry_events&lt;br&gt;mart: user_report_mart&lt;br&gt;(ORDER BY username, date)&lt;br&gt;etl_watermark" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=12;fillColor=#438DD5;fontColor=#ffffff;strokeColor=#2E6295;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="860" y="300" width="200" height="160" as="geometry" />
+        </mxCell>
+
+        <mxCell id="crm" value="&lt;b&gt;CRM DB&lt;/b&gt;&lt;br&gt;[Container: PostgreSQL]&lt;br&gt;Клиенты, протезы,&lt;br&gt;контракты представительства" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#438DD5;fontColor=#ffffff;strokeColor=#2E6295;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="520" y="560" width="180" height="110" as="geometry" />
+        </mxCell>
+
+        <mxCell id="tel" value="&lt;b&gt;Telemetry DB&lt;/b&gt;&lt;br&gt;[Container: PostgreSQL]&lt;br&gt;События датчиков:&lt;br&gt;шаги, нагрузка, батарея,&lt;br&gt;падения" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#438DD5;fontColor=#ffffff;strokeColor=#2E6295;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="740" y="560" width="180" height="110" as="geometry" />
+        </mxCell>
+
+        <mxCell id="note" value="&lt;b&gt;Гарантии&lt;/b&gt;&lt;br&gt;• API не считает витрину на лету — только SELECT из mart&lt;br&gt;• Запрос за период &amp;gt; watermark → 404 (данные ещё не обработаны Airflow)&lt;br&gt;• user_id в запросе игнорируется / отвергается, если ≠ текущий пользователь" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;align=left;spacingLeft=10;fontSize=11;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="260" y="720" width="520" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- edges -->
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1" source="person" target="fe">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e1l" value="Download Report" style="edgeLabel;html=1;align=center;fontSize=10;" vertex="1" connectable="0" parent="e1">
+          <mxGeometry x="-0.1" relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1" source="fe" target="api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2l" value="GET /reports + cookie" style="edgeLabel;html=1;align=center;fontSize=10;" vertex="1" connectable="0" parent="e2">
+          <mxGeometry x="-0.1" relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;dashed=1;" edge="1" parent="1" source="api" target="auth">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3l" value="validate session" style="edgeLabel;html=1;align=center;fontSize=10;" vertex="1" connectable="0" parent="e3">
+          <mxGeometry x="-0.2" relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1" source="api" target="ch">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="370" y="500" />
+              <mxPoint x="960" y="500" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4l" value="SELECT from mart" style="edgeLabel;html=1;align=center;fontSize=10;" vertex="1" connectable="0" parent="e4">
+          <mxGeometry x="-0.1" relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1" source="airflow" target="crm">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1" source="airflow" target="tel">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;" edge="1" parent="1" source="airflow" target="ch">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7l" value="load + transform" style="edgeLabel;html=1;align=center;fontSize=10;" vertex="1" connectable="0" parent="e7">
+          <mxGeometry x="-0.2" relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
