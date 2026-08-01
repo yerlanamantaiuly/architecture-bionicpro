@@ -171,9 +171,12 @@
       "serviceAccountsEnabled": false,
       "fullScopeAllowed": true,
       "redirectUris": [
+        "http://10.2.67.21:8001/auth/callback",
         "http://localhost:8001/auth/callback"
       ],
       "webOrigins": [
+        "http://10.2.67.21:8001",
+        "http://10.2.67.21:3000",
         "http://localhost:8001",
         "http://localhost:3000"
       ],
@@ -191,9 +194,11 @@
       "directAccessGrantsEnabled": false,
       "fullScopeAllowed": true,
       "redirectUris": [
+        "http://10.2.67.21:3000/*",
         "http://localhost:3000/*"
       ],
       "webOrigins": [
+        "http://10.2.67.21:3000",
         "http://localhost:3000"
       ],
       "attributes": {

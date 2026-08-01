@@ -23,8 +23,13 @@
 
 ## Задание 1 / Задача 5 — MFA OTP
 
-См. [mfa.md](mfa.md).
+См. [mfa.md](mfa.md). Скрин: [screenshots/01-mfa-totp-setup.png](screenshots/01-mfa-totp-setup.png).
 
 ## Задание 1 / Задача 6 — Яндекс ID
 
 См. [yandex-id.md](yandex-id.md).
+
+| Скрин | Описание |
+|-------|----------|
+| [screenshots/02-yandex-consent.png](screenshots/02-yandex-consent.png) | Consent на данные профиля |
+| [screenshots/03-yandex-profile-ui.png](screenshots/03-yandex-profile-ui.png) | Профиль Яндекс ID в UI |

@@ -60,8 +60,8 @@ services:
       KC_HOSTNAME_STRICT: "false"
       KC_HOSTNAME_STRICT_HTTPS: "false"
       KC_HTTP_ENABLED: "true"
-      KC_HOSTNAME: localhost
-      KC_HOSTNAME_PORT: "8080"
+      KC_HOSTNAME_URL: http://${PUBLIC_HOST:-10.2.67.21}:8080
+      KC_HOSTNAME_ADMIN_URL: http://${PUBLIC_HOST:-10.2.67.21}:8080
       KC_PROXY: edge
     command:
       - start-dev
@@ -82,18 +82,20 @@ services:
       - "8001:8001"
     environment:
       KEYCLOAK_URL: http://keycloak:8080
-      KEYCLOAK_PUBLIC_URL: http://localhost:8080
+      KEYCLOAK_PUBLIC_URL: http://${PUBLIC_HOST:-10.2.67.21}:8080
       KEYCLOAK_REALM: reports-realm
       KEYCLOAK_CLIENT_ID: bionicpro-auth
       KEYCLOAK_CLIENT_SECRET: bionicpro-auth-secret
-      REDIRECT_URI: http://localhost:8001/auth/callback
-      FRONTEND_URL: http://localhost:3000
+      REDIRECT_URI: http://${PUBLIC_HOST:-10.2.67.21}:8001/auth/callback
+      FRONTEND_URL: http://${PUBLIC_HOST:-10.2.67.21}:3000
       COOKIE_SECURE: "false"
       COOKIE_SAMESITE: lax
       SESSION_TTL_SECONDS: "1800"
       TOKEN_ENCRYPTION_KEY: "iw3lx6S7H4IMZsm_xrqEJqa5kHozlwoP9J0WFWHHRoU="
       PROFILE_DB_PATH: /data/profiles.db
       YANDEX_IDP_ALIAS: yandex
+      YANDEX_CLIENT_ID: 5e79e67eaecc4daaa87a3b5a5e09c05e
+      YANDEX_CLIENT_SECRET: b64e2bf97bdb4bbfa08f474595de7d40
     volumes:
       - ./bionicpro-auth/data:/data
     depends_on:
@@ -103,10 +105,10 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        REACT_APP_API_URL: http://${PUBLIC_HOST:-10.2.67.21}:8000
+        REACT_APP_AUTH_URL: http://${PUBLIC_HOST:-10.2.67.21}:8001
     ports:
       - "3000:3000"
-    environment:
-      REACT_APP_API_URL: http://localhost:8000
-      REACT_APP_AUTH_URL: http://localhost:8001
     depends_on:
       - bionicpro-auth

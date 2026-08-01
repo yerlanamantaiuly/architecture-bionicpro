@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import logging
 import os
 import secrets
 import sqlite3
@@ -16,6 +17,7 @@ from typing import Any, Iterator
 from urllib.parse import urlencode
 
 import httpx
+import jwt
 from cryptography.fernet import Fernet
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,7 +39,13 @@ COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
 COOKIE_SAMESITE = os.getenv("COOKIE_SAMESITE", "lax")
 SESSION_TTL_SECONDS = int(os.getenv("SESSION_TTL_SECONDS", "1800"))
 YANDEX_IDP_ALIAS = os.getenv("YANDEX_IDP_ALIAS", "yandex")
+YANDEX_CLIENT_ID = os.getenv("YANDEX_CLIENT_ID", "5e79e67eaecc4daaa87a3b5a5e09c05e")
+YANDEX_CLIENT_SECRET = os.getenv(
+    "YANDEX_CLIENT_SECRET", "b64e2bf97bdb4bbfa08f474595de7d40"
+)
 PROFILE_DB_PATH = os.getenv("PROFILE_DB_PATH", "/data/profiles.db")
+
+logger = logging.getLogger("bionicpro-auth")
 
 _FERNET_KEY = os.getenv("TOKEN_ENCRYPTION_KEY") or Fernet.generate_key().decode()
 _fernet = Fernet(_FERNET_KEY.encode() if isinstance(_FERNET_KEY, str) else _FERNET_KEY)
@@ -50,7 +58,11 @@ app = FastAPI(title="bionicpro-auth", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_URL, "http://localhost:3000"],
+    allow_origins=[
+        FRONTEND_URL,
+        "http://localhost:3000",
+        "http://10.2.67.21:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -109,6 +121,10 @@ class SessionData:
 
 _sessions: dict[str, SessionData] = {}
 _pending_pkce: dict[str, dict[str, Any]] = {}
+# Keycloak 21 OIDC broker always sends nonce and requires it back in id_token.
+# disableNonce is ignored on KC 21 (added only in later versions).
+# Token exchange is server-to-server (no state), so keep the latest authorize nonce.
+_last_yandex_nonce: str | None = None
 
 
 def _encrypt(token: str) -> bytes:
@@ -264,6 +280,127 @@ async def login(idp: str | None = None) -> RedirectResponse:
 @app.get("/auth/login/yandex")
 async def login_yandex() -> RedirectResponse:
     return await login(idp=YANDEX_IDP_ALIAS)
+
+
+@app.get("/auth/yandex-authorize")
+async def yandex_authorize_proxy(request: Request) -> RedirectResponse:
+    """
+    Keycloak OIDC broker always prepends scope 'openid'.
+    Yandex OAuth does not accept 'openid' → invalid_scope.
+    This proxy strips 'openid' and forwards the browser to Yandex.
+    """
+    global _last_yandex_nonce
+    params = {k: v for k, v in request.query_params.multi_items()}
+    raw_scope = params.get("scope", "")
+    scopes = [s for s in raw_scope.replace(",", " ").split() if s and s != "openid"]
+    if not scopes:
+        scopes = ["login:info"]
+    params["scope"] = " ".join(scopes)
+    # Remember nonce for synthesized id_token; Yandex itself does not echo it.
+    nonce = params.pop("nonce", None)
+    if nonce:
+        _last_yandex_nonce = nonce
+        logger.info("yandex-authorize: stored nonce for id_token echo")
+    return RedirectResponse(
+        f"https://oauth.yandex.ru/authorize?{urlencode(params)}",
+        status_code=302,
+    )
+
+
+@app.post("/auth/yandex-token")
+async def yandex_token_proxy(request: Request) -> JSONResponse:
+    """
+    Yandex returns access_token but no id_token.
+    Keycloak OIDC broker requires id_token → synthesize one from Yandex profile.
+    """
+    form = await request.form()
+    data = {k: str(v) for k, v in form.items()}
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        token_resp = await client.post("https://oauth.yandex.ru/token", data=data)
+        payload = token_resp.json()
+        if token_resp.status_code != 200 or "access_token" not in payload:
+            return JSONResponse(content=payload, status_code=token_resp.status_code)
+
+        access_token = payload["access_token"]
+        info_resp = await client.get(
+            "https://login.yandex.ru/info",
+            params={"format": "json"},
+            headers={"Authorization": f"OAuth {access_token}"},
+        )
+        profile = info_resp.json() if info_resp.status_code == 200 else {}
+
+    now = int(time.time())
+    expires_in = int(payload.get("expires_in", 3600))
+    sub = str(profile.get("id") or profile.get("psuid") or secrets.token_hex(8))
+    emails = profile.get("emails") or []
+    email = profile.get("default_email") or (emails[0] if emails else None)
+    secret = data.get("client_secret") or YANDEX_CLIENT_SECRET
+
+    global _last_yandex_nonce
+    id_claims = {
+        "iss": "https://login.yandex.ru",
+        "sub": sub,
+        "aud": data.get("client_id") or YANDEX_CLIENT_ID,
+        "iat": now,
+        "exp": now + expires_in,
+        "auth_time": now,
+        "preferred_username": profile.get("login"),
+        "email": email,
+        "name": profile.get("real_name") or profile.get("display_name"),
+        "given_name": profile.get("first_name"),
+        "family_name": profile.get("last_name"),
+        "login": profile.get("login"),
+        "default_email": email,
+        "first_name": profile.get("first_name"),
+        "last_name": profile.get("last_name"),
+    }
+    # KC 21 requires nonce claim in id_token (disableNonce is a no-op there).
+    if _last_yandex_nonce:
+        id_claims["nonce"] = _last_yandex_nonce
+        logger.info("yandex-token: echoed nonce into synthesized id_token")
+        _last_yandex_nonce = None
+    else:
+        logger.warning("yandex-token: no stored nonce — Keycloak broker may fail")
+    payload["id_token"] = jwt.encode(id_claims, secret, algorithm="HS256")
+    payload["token_type"] = payload.get("token_type") or "bearer"
+    return JSONResponse(content=payload)
+
+
+@app.get("/auth/yandex-userinfo")
+async def yandex_userinfo_proxy(request: Request) -> JSONResponse:
+    """Yandex expects Authorization: OAuth <token>, Keycloak sends Bearer."""
+    auth = request.headers.get("Authorization", "")
+    token = auth.replace("Bearer ", "").replace("OAuth ", "").strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing token")
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        info_resp = await client.get(
+            "https://login.yandex.ru/info",
+            params={"format": "json"},
+            headers={"Authorization": f"OAuth {token}"},
+        )
+    if info_resp.status_code != 200:
+        return JSONResponse(content=info_resp.json(), status_code=info_resp.status_code)
+
+    profile = info_resp.json()
+    emails = profile.get("emails") or []
+    email = profile.get("default_email") or (emails[0] if emails else None)
+    return JSONResponse(
+        {
+            "sub": str(profile.get("id") or profile.get("psuid")),
+            "login": profile.get("login"),
+            "preferred_username": profile.get("login"),
+            "email": email,
+            "default_email": email,
+            "name": profile.get("real_name") or profile.get("display_name"),
+            "first_name": profile.get("first_name"),
+            "last_name": profile.get("last_name"),
+            "given_name": profile.get("first_name"),
+            "family_name": profile.get("last_name"),
+        }
+    )
 
 
 @app.get("/auth/callback")

@@ -3,29 +3,20 @@ FROM node:16-alpine as build
 
 WORKDIR /app
 
-# Copy package files
-COPY package.json package-lock.json ./
+ARG REACT_APP_API_URL=http://10.2.67.21:8000
+ARG REACT_APP_AUTH_URL=http://10.2.67.21:8001
+ENV REACT_APP_API_URL=$REACT_APP_API_URL
+ENV REACT_APP_AUTH_URL=$REACT_APP_AUTH_URL
 
-# Install dependencies
+COPY package.json package-lock.json ./
 RUN npm install --legacy-peer-deps
 
-# Copy source code
 COPY . .
 
-# Build the app
 RUN npm run build
 
-# Production stage
 FROM nginx:alpine
-
-# Copy built assets from build stage
 COPY --from=build /app/build /usr/share/nginx/html
-
-# Copy nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Expose port
 EXPOSE 3000
-
-# Start nginx
 CMD ["nginx", "-g", "daemon off;"]

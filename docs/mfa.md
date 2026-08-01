@@ -29,3 +29,9 @@
 http://localhost:8080 → reports-realm → Authentication:
 - Required actions → Configure OTP (Default ON)
 - Flows → `browser-with-mfa` (bound as Browser flow)
+
+## Скриншот
+
+Первый вход (в т.ч. через Яндекс ID) — обязательная настройка Mobile Authenticator:
+
+![MFA TOTP setup](screenshots/01-mfa-totp-setup.png)

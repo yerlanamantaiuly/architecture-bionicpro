@@ -16,6 +16,9 @@ fi
 YANDEX_CLIENT_ID="${YANDEX_CLIENT_ID:?Set YANDEX_CLIENT_ID}"
 YANDEX_CLIENT_SECRET="${YANDEX_CLIENT_SECRET:?Set YANDEX_CLIENT_SECRET}"
 ALIAS="yandex"
+PUBLIC_HOST="${PUBLIC_HOST:-10.2.67.21}"
+# Keycloak OIDC always prepends 'openid'; proxy strips it before Yandex
+YANDEX_AUTH_URL="${YANDEX_AUTH_URL:-http://${PUBLIC_HOST}:8001/auth/yandex-authorize}"
 
 TOKEN=$(curl -sf -X POST "$KEYCLOAK_URL/realms/master/protocol/openid-connect/token" \
   -d "client_id=admin-cli" -d "username=$ADMIN_USER" -d "password=$ADMIN_PASS" \
@@ -43,16 +46,17 @@ print(json.dumps({
   "linkOnly": False,
   "firstBrokerLoginFlowAlias": "first broker login",
   "config": {
-    "authorizationUrl": "https://oauth.yandex.ru/authorize",
-    "tokenUrl": "https://oauth.yandex.ru/token",
-    "userInfoUrl": "https://login.yandex.ru/info?format=json",
+    "authorizationUrl": "$YANDEX_AUTH_URL",
+    "tokenUrl": "http://${PUBLIC_HOST}:8001/auth/yandex-token",
+    "userInfoUrl": "http://${PUBLIC_HOST}:8001/auth/yandex-userinfo",
     "clientId": "$YANDEX_CLIENT_ID",
     "clientSecret": "$YANDEX_CLIENT_SECRET",
     "clientAuthMethod": "client_secret_post",
     "syncMode": "IMPORT",
-    "defaultScope": "login:info login:email login:avatar",
+    "defaultScope": "login:info",
     "validateSignature": "false",
     "useJwksUrl": "false",
+    "disableNonce": "true",
     "pkceEnabled": "false",
     "guiOrder": "1"
   }

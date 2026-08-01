@@ -3,10 +3,21 @@
 ## Redirect URI в кабинете Яндекса (точно так)
 
 ```
-http://localhost:8080/realms/reports-realm/broker/yandex/endpoint
+http://10.2.67.21:8080/realms/reports-realm/broker/yandex/endpoint
 ```
 
-Права: **API Яндекс ID** (`login:info`, `login:email`, `login:avatar`). Диск не нужен.
+(локально также можно оставить `http://localhost:8080/...` — лучше добавить оба URI в кабинете Яндекса)
+
+## Важно: Keycloak и Yandex OAuth
+
+Яндекс — это OAuth2, не полный OIDC. Keycloak OIDC-брокер:
+1. всегда добавляет scope `openid` → прокси `/auth/yandex-authorize` убирает его;
+2. требует `id_token` → прокси `/auth/yandex-token` обменивает code у Яндекса и синтезирует `id_token`;
+3. шлёт `Bearer` в userinfo, Яндекс ждёт `OAuth` → прокси `/auth/yandex-userinfo`;
+4. Keycloak 21 требует claim `nonce` в `id_token` (опция `disableNonce` здесь не работает) —
+   authorize-прокси запоминает nonce, token-прокси кладёт его в синтетический JWT.
+
+В IdP URL-ы указывают на `http://10.2.67.21:8001/auth/yandex-*`.
 
 ## Секреты
 
@@ -39,5 +50,16 @@ chmod +x keycloak/configure-yandex-idp.sh
 ## Проверка
 
 1. Rebuild: `docker compose up -d --build bionicpro-auth frontend`
-2. http://localhost:3000 → **Login with Yandex ID**
-3. Авторизация на Яндексе → экран согласия → профиль в UI
+2. http://10.2.67.21:3000 → **Login with Yandex ID**
+3. Авторизация на Яндексе → (при первом входе MFA) → экран согласия → профиль в UI
+
+## Скриншоты (подтверждение E2E)
+
+| Файл | Что закрывает |
+|------|----------------|
+| [screenshots/02-yandex-consent.png](screenshots/02-yandex-consent.png) | Запрос разрешения на использование данных профиля |
+| [screenshots/03-yandex-profile-ui.png](screenshots/03-yandex-profile-ui.png) | Профиль Яндекс ID в UI после сохранения в БД |
+
+![Consent](screenshots/02-yandex-consent.png)
+
+![Profile in UI](screenshots/03-yandex-profile-ui.png)
