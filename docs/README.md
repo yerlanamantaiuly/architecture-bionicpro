@@ -33,3 +33,9 @@
 |-------|----------|
 | [screenshots/02-yandex-consent.png](screenshots/02-yandex-consent.png) | Consent на данные профиля |
 | [screenshots/03-yandex-profile-ui.png](screenshots/03-yandex-profile-ui.png) | Профиль Яндекс ID в UI |
+
+## Экспорт realm (чеклист сдачи)
+
+После всех настроек Keycloak:
+
+[`keycloak/keycloak-results-export.json`](../keycloak/keycloak-results-export.json) — partial-export (`exportClients`, `exportGroupsAndRoles`): PKCE, LDAP, MFA flow, IdP `yandex`, клиенты `bionicpro-auth` / `reports-frontend`.
