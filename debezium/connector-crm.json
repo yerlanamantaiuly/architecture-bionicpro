@@ -1,0 +1,31 @@
+{
+  "name": "bionicpro-crm-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "tasks.max": "1",
+    "database.hostname": "source-db",
+    "database.port": "5432",
+    "database.user": "bionic",
+    "database.password": "bionic",
+    "database.dbname": "bionicpro",
+    "topic.prefix": "bionicpro",
+    "table.include.list": "crm.clients,telemetry.sensor_events",
+    "plugin.name": "pgoutput",
+    "slot.name": "bionicpro_debezium",
+    "publication.name": "bionicpro_publication",
+    "publication.autocreate.mode": "filtered",
+    "snapshot.mode": "initial",
+    "tombstones.on.delete": "false",
+    "decimal.handling.mode": "double",
+    "time.precision.mode": "adaptive_time_microseconds",
+    "transforms": "unwrap",
+    "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+    "transforms.unwrap.drop.tombstones": "true",
+    "transforms.unwrap.delete.handling.mode": "rewrite",
+    "transforms.unwrap.add.fields": "op,table",
+    "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "key.converter.schemas.enable": "false",
+    "value.converter.schemas.enable": "false"
+  }
+}

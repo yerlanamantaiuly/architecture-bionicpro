@@ -1,6 +1,14 @@
--- CRM + telemetry source data for BionicPRO reports ETL
+-- CRM + telemetry source data for BionicPRO reports ETL / CDC
 CREATE SCHEMA IF NOT EXISTS crm;
 CREATE SCHEMA IF NOT EXISTS telemetry;
+
+-- Debezium needs REPLICATION (also applied by cdc-prepare.sql on existing volumes)
+DO $$
+BEGIN
+  EXECUTE 'ALTER USER bionic WITH REPLICATION';
+EXCEPTION WHEN OTHERS THEN
+  NULL;
+END $$;
 
 CREATE TABLE crm.clients (
     client_id       SERIAL PRIMARY KEY,

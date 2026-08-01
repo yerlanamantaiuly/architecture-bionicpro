@@ -26,6 +26,8 @@ CH_PORT = int(os.getenv("CLICKHOUSE_PORT", "9000"))
 CH_USER = os.getenv("CLICKHOUSE_USER", "default")
 CH_PASSWORD = os.getenv("CLICKHOUSE_PASSWORD", "")
 CH_DB = os.getenv("CLICKHOUSE_DB", "bionicpro")
+# Assignment 4: read CDC mart built via KafkaEngine + MaterializedView
+REPORT_MART = os.getenv("REPORT_MART", "user_report_mart_cdc")
 
 # S3 / MinIO
 S3_ENDPOINT = os.getenv("S3_ENDPOINT", "http://minio:9000")
@@ -128,6 +130,15 @@ async def _current_user(request: Request) -> dict[str, Any]:
 
 
 def _watermark() -> date | None:
+    """Latest date available in the active mart (CDC preferred)."""
+    if REPORT_MART == "user_report_mart_cdc":
+        rows = _ch().execute(
+            f"SELECT max(report_date) FROM {REPORT_MART}"
+        )
+        if rows and rows[0][0] is not None:
+            value = rows[0][0]
+            return value.date() if isinstance(value, datetime) else value
+
     rows = _ch().execute(
         """
         SELECT max_source_date
@@ -146,29 +157,59 @@ def _watermark() -> date | None:
 
 
 def _build_report(username: str, start: date, end: date, wm: date) -> dict[str, Any]:
-    rows = _ch().execute(
-        """
-        SELECT
-            username,
-            full_name,
-            email,
-            prosthesis_model,
-            region,
-            report_date,
-            steps_count,
-            active_minutes,
-            battery_avg,
-            load_cycles,
-            fall_events,
-            events_count
-        FROM user_report_mart FINAL
-        WHERE username = %(username)s
-          AND report_date >= %(start)s
-          AND report_date <= %(end)s
-        ORDER BY report_date
-        """,
-        {"username": username, "start": start, "end": end},
-    )
+    if REPORT_MART == "user_report_mart_cdc":
+        rows = _ch().execute(
+            """
+            SELECT
+                m.username,
+                any(c.full_name) AS full_name,
+                any(c.email) AS email,
+                any(c.prosthesis_model) AS prosthesis_model,
+                any(c.region) AS region,
+                m.report_date,
+                sum(m.steps_count) AS steps_count,
+                intDiv(sum(m.active_seconds), 60) AS active_minutes,
+                if(sum(m.battery_samples) = 0, 0,
+                   sum(m.battery_pct_sum) / sum(m.battery_samples)) AS battery_avg,
+                sum(m.load_cycles) AS load_cycles,
+                sum(m.fall_events) AS fall_events,
+                sum(m.events_count) AS events_count
+            FROM user_report_mart_cdc AS m
+            LEFT JOIN crm_clients_cdc AS c FINAL ON c.username = m.username
+            WHERE m.username = %(username)s
+              AND m.report_date >= %(start)s
+              AND m.report_date <= %(end)s
+            GROUP BY m.username, m.report_date
+            ORDER BY m.report_date
+            """,
+            {"username": username, "start": start, "end": end},
+        )
+        source = "clickhouse.bionicpro.user_report_mart_cdc (Debezium/Kafka/MV)"
+    else:
+        rows = _ch().execute(
+            """
+            SELECT
+                username,
+                full_name,
+                email,
+                prosthesis_model,
+                region,
+                report_date,
+                steps_count,
+                active_minutes,
+                battery_avg,
+                load_cycles,
+                fall_events,
+                events_count
+            FROM user_report_mart FINAL
+            WHERE username = %(username)s
+              AND report_date >= %(start)s
+              AND report_date <= %(end)s
+            ORDER BY report_date
+            """,
+            {"username": username, "start": start, "end": end},
+        )
+        source = "clickhouse.bionicpro.user_report_mart"
 
     if not rows:
         raise HTTPException(
@@ -214,7 +255,7 @@ def _build_report(username: str, start: date, end: date, wm: date) -> dict[str, 
         "summary": summary,
         "daily": daily,
         "generated_at": datetime.utcnow().isoformat() + "Z",
-        "source": "clickhouse.bionicpro.user_report_mart",
+        "source": source,
     }
 
 

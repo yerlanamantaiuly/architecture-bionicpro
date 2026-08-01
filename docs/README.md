@@ -51,6 +51,10 @@
 | [screenshots/05-cdn-cache-hit.png](screenshots/05-cdn-cache-hit.png) | Терминал: MISS → HIT |
 | [screenshots/05-cdn-cache-hit.txt](screenshots/05-cdn-cache-hit.txt) | Тот же вывод текстом |
 
+## Задание 4 — CDC
+
+См. [cdc.md](cdc.md). Debezium → Kafka → ClickHouse KafkaEngine/MV → `user_report_mart_cdc`.  
+API читает `REPORT_MART=user_report_mart_cdc`.
 ## Экспорт realm (чеклист сдачи)
 
 После всех настроек Keycloak:
